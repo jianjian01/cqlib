@@ -12,8 +12,6 @@
 
 import copy
 import sys
-import threading
-import time
 
 import numpy as np
 import pytest
@@ -170,71 +168,18 @@ def test_transform_results_have_value_equality() -> None:
     assert transform_first.__eq__(object()) is NotImplemented
 
 
-def _assert_action_releases_gil(action, *, timeout=5.0) -> None:
-    if not getattr(sys, "_is_gil_enabled", lambda: True)():
-        pytest.skip("GIL release is only observable when the GIL is enabled")
-
-    ready = threading.Event()
-    stop = threading.Event()
-    progress = [0]
-
-    def worker() -> None:
-        ready.set()
-        while not stop.is_set():
-            progress[0] += 1
-            # Yield promptly once we acquire the GIL; the main thread disables
-            # automatic bytecode switching during the observation window.
-            time.sleep(0)
-
-    thread = threading.Thread(target=worker, daemon=True)
-    switch_interval = sys.getswitchinterval()
-    try:
-        # Python execution between calls must not count as evidence of release.
-        # Set this before starting the worker so it cannot request a handoff
-        # using the old interval just before the observation window starts.
-        sys.setswitchinterval(max(switch_interval, 60.0, timeout * 10))
-        thread.start()
-        assert ready.wait(timeout=5.0), "GIL probe thread did not become ready"
-        before = progress[0]
-        deadline = time.monotonic() + timeout
-        attempts = 0
-        while time.monotonic() < deadline:
-            action()
-            attempts += 1
-            if progress[0] > before:
-                break
-        else:
-            pytest.fail(
-                f"No Python thread progress during {attempts} calls in "
-                f"{timeout}s; the action may be holding the GIL"
-            )
-    finally:
-        stop.set()
-        sys.setswitchinterval(switch_interval)
-        if thread.ident is not None:
-            thread.join(timeout=5.0)
-    assert not thread.is_alive(), "GIL probe thread did not stop"
-
-
-def test_gil_probe_rejects_an_action_that_holds_the_gil() -> None:
-    switch_interval = sys.getswitchinterval()
-    with pytest.raises(pytest.fail.Exception, match="No Python thread progress"):
-        _assert_action_releases_gil(lambda: None, timeout=0.05)
-    assert sys.getswitchinterval() == switch_interval
-
-
 @pytest.mark.parametrize(
     "run",
     [canonicalize_circuit, lambda circuit: Canonicalizer().run(circuit)],
 )
-def test_canonicalization_releases_gil(run) -> None:
+def test_canonicalization_releases_gil(run, assert_releases_gil) -> None:
     circuit = Circuit(1)
     for _ in range(20_000):
         circuit.h(0)
 
     # Fast implementations may finish a call before the worker is scheduled.
     # Retry within a bounded window instead of requiring any minimum call time.
-    _assert_action_releases_gil(lambda: run(circuit))
+    assert_releases_gil(lambda: run(circuit))
 
 
 def test_zero_round_limit_is_rejected_when_run() -> None:

@@ -1722,8 +1722,14 @@ fn workflow_lowers_to_exact_pair_and_runs_native_fixed_point_in_both_modes() {
             .iter()
             .all(|gate| matches!(gate, StandardGate::U | StandardGate::CZ))
     );
-    assert!(!normal.step_changed("resynthesize.two_qubit_blocks.post_routing"));
-    assert!(enhanced.step_changed("resynthesize.two_qubit_blocks.post_routing"));
+    let post_routing = "resynthesize.two_qubit_blocks.post_routing";
+    assert!(normal.step(post_routing).is_none());
+    let resynthesis = enhanced.step(post_routing).unwrap();
+    assert!(!resynthesis.skipped, "{resynthesis:?}");
+    // A resynthesis candidate need not improve on an earlier decomposition.
+    // Floating-point tie-breaking can affect acceptance on different platforms;
+    // the contract is that enhanced mode runs this stage and the final circuit
+    // uses the exact physical basis, not that this particular stage must change it.
     // `changed` can reflect only canonicalization of a tiny global-phase
     // residual, which varies across architectures. Require execution and the
     // configured quality policy; correctness is checked on the final circuits.

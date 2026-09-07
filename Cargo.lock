@@ -175,7 +175,7 @@ dependencies = [
 
 [[package]]
 name = "binding-python"
-version = "1.4.0-beta2"
+version = "1.4.0-beta3"
 dependencies = [
  "chrono",
  "cqlib-core",

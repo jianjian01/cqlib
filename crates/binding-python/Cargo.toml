@@ -1,6 +1,6 @@
 [package]
 name = "binding-python"
-version = "1.4.0-beta1"
+version = "1.4.0-beta2"
 edition.workspace = true
 rust-version.workspace = true
 license-file.workspace = true

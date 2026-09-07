@@ -49,3 +49,13 @@ jobs:
           maturin develop --locked --manifest-path crates/binding-python/Cargo.toml
           cd crates/binding-python
           python -m pytest tests
+      - name: Upload visualization diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visualization-diagnostics-${{ inputs.runner }}
+          path: |
+            crates/cqlib-core/src/visualization/**/figure/**/*.png
+            crates/cqlib-core/src/visualization/**/figure/*.svg
+          if-no-files-found: ignore
+          retention-days: 7
